@@ -1,70 +1,173 @@
-import { Image, StyleSheet, Platform } from 'react-native';
+import { Image, StyleSheet, TouchableOpacity, Text, View, SafeAreaView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { Accelerometer } from 'expo-sensors';
+import Constants from 'expo-constants';
+import LottieView from 'lottie-react-native';
+import Running from '../../assets/running.json';
+import Sitting from '../../assets/sitting.json';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+const CALORIES_PER_STEP = 0.05;
 
 export default function HomeScreen() {
+  const [steps, setSteps] = useState(0);
+  const [isCounting, setIsCounting] = useState(false);
+  const [lastY, setLastY] = useState(0);
+  const [lastTimeTamp, setLastTimeTamp] = useState(0);
+
+  const animationRefRunning = useRef<LottieView>(null);
+  const animationRefSitting = useRef<LottieView>(null);
+
+  useEffect(() => {
+    let subscription: any;
+    Accelerometer.isAvailableAsync().then((result) => {
+      if (result) {
+        subscription = Accelerometer.addListener((accelerometerData) => {
+          const { y } = accelerometerData;
+          const threshold = 0.1;
+          const timestamp = new Date().getTime();
+
+          if (
+            Math.abs(y - lastY) > threshold &&
+            !isCounting &&
+            (timestamp - lastTimeTamp > 800)
+          ) {
+            setIsCounting(true);
+            setLastY(y);
+            setLastTimeTamp(timestamp);
+
+            setSteps((prevSteps) => prevSteps + 1);
+
+            setTimeout(() => {
+              setIsCounting(false);
+            }, 1200);
+          }
+        });
+      } else {
+        console.log('Accelerometer not available on this device');
+      }
+    });
+
+    return () => {
+      if (subscription) {
+        subscription.remove();
+      }
+    };
+  }, [isCounting, lastY, lastTimeTamp]);
+
+  const resetSteps = () => {
+    setSteps(0);
+  };
+
+  const estimatedCaloriesBurned = steps * CALORIES_PER_STEP;
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({ ios: 'cmd + d', android: 'cmd + m' })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <SafeAreaView style={styles.container}>
+      <Text style={styles.title}>Step Tracker</Text>
+      <View style={styles.infoContainer}>
+        <View style={styles.stepsContainer}>
+          <Text style={styles.stepsText}>{steps}</Text>
+          <Text style={styles.stepsLabel}>Steps</Text>
+        </View>
+        <View style={styles.caloriesContainer}>
+          <Text style={styles.caloriesLabel}>Estimated Calories Burned:</Text>
+          <Text style={styles.caloriesText}>{estimatedCaloriesBurned.toFixed(2)}</Text>
+        </View>
+      </View>
+      <View style={styles.animationContainer}>
+        {isCounting ? (
+          <LottieView
+            autoPlay
+            loop
+            ref={animationRefRunning}
+            style={styles.animation}
+            source={Running}
+          />
+        ) : (
+          <LottieView
+            autoPlay
+            loop
+            ref={animationRefSitting}
+            style={styles.animation}
+            source={Sitting}
+          />
+        )}
+      </View>
+      <TouchableOpacity onPress={resetSteps}>
+        <Text style={styles.resetButton}>Reset Steps</Text>
+      </TouchableOpacity>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: {
+    flex: 1,
+    backgroundColor: '#123456',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 28,
+    marginBottom: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  infoContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  stepsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    margin: 20,
+    borderWidth: 1,
+    borderColor: '#000',
+    borderRadius: 5,
+    backgroundColor: '#fff',
+    padding: 16,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  stepsText: {
+    fontSize: 36,
+    color: '#379544',
+    fontWeight: 'bold',
+    marginRight: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  stepsLabel: {
+    fontSize: 24,
+    color: '#555',
+  },
+  caloriesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  caloriesLabel: {
+    fontSize: 20,
+    color: '#fff',
+    marginRight: 9,
+  },
+  caloriesText: {
+    fontSize: 18,
+    color: 'red',
+    fontWeight: 'bold',
+  },
+  animationContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#123456',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    elevation: 5,
+  },
+  animation: {
+    width: 400,
+    height: 400,
+    backgroundColor: 'transparent',
+  },
+  resetButton: {
+    fontSize: 18,
+    backgroundColor:'blue',
+    color: '#fff',
   },
 });
